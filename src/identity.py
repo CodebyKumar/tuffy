@@ -9,7 +9,7 @@ src/prompts/templates.py's self_model() renders this into the system prompt.
 """
 
 AGENT_NAME = "Tuffy"
-AGENT_TAGLINE = "a local, tool-using AI agent"
+AGENT_TAGLINE = "a tool-using AI agent"
 
 # Keys that must never be written into user memory by the automatic fact
 # extractor (src/memory.py's extract_facts) — these describe the agent
@@ -46,10 +46,11 @@ def is_transcript_key(normalized_key: str) -> bool:
 # Substrings that mark a VALUE as describing the agent rather than the user,
 # regardless of which key it's filed under (a small model files "I'm a local
 # AI agent" under plain "role", "purpose", "title" just as often as under an
-# agent_-prefixed key).
+# agent_-prefixed key). Deliberately provider-agnostic — these must keep
+# matching regardless of which model or backend is currently loaded.
 _SELF_REFERENTIAL_VALUE_MARKERS = (
     "i'm tuffy", "i am tuffy", "local ai agent", "ai agent", "language model",
-    "i run on", "running locally", "llama.cpp", "qwen", "large language model",
+    "i run on", "running locally", "large language model",
 )
 
 
@@ -58,14 +59,28 @@ def is_self_referential_value(value: str) -> bool:
     return any(marker in lowered for marker in _SELF_REFERENTIAL_VALUE_MARKERS)
 
 
+# Human-readable label per provider, for the self-model description below.
+# New providers just need an entry here — everything else reads generically
+# off the model card.
+_PROVIDER_LABELS = {
+    "llama_cpp": "running locally",
+    "openai_compatible": "via API",
+}
+
+
 def describe(model_card: dict) -> str:
-    """One rendered block describing the agent for the system prompt."""
+    """One rendered block describing the agent for the system prompt. Reads
+    everything from the active model card so this never hardcodes a specific
+    model family or backend — swapping models or providers needs no change
+    here."""
     caps = ", ".join(model_card["capabilities"])
+    provider_label = _PROVIDER_LABELS.get(model_card["provider"], model_card["provider"])
+    quant = f", {model_card['quantization']} quant" if model_card.get("quantization") not in (None, "none") else ""
+    params = f", {model_card['parameters']} params" if model_card.get("parameters") else ""
     return (
         f"- You are {AGENT_NAME}, {AGENT_TAGLINE}.\n"
         f"- Currently running on: {model_card['name']} "
-        f"({model_card['family']}, {model_card['parameters']} params, "
-        f"{model_card['quantization']} quant, capabilities: {caps}), via llama.cpp.\n"
+        f"({model_card['family']}{params}{quant}, capabilities: {caps}), {provider_label}.\n"
         "- This identity is fixed by your configuration, not something you or the user "
         "can 'remember' or change — never store your own name, model, or role as a "
         "fact about the user."
