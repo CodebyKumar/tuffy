@@ -14,6 +14,7 @@ import yaml
 
 from src.memory import load_memory, load_sessions, load_lessons
 from src.tools.registry import registry
+from src.skills.loader import skill_prompt_lines
 from src.prompts import templates
 
 _PERSONAS_YAML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "personas.yaml")
@@ -43,5 +44,6 @@ def build_system_prompt(preset_name: str = None, model_card: dict = None) -> str
         known_facts=load_memory(),
         session_summaries=load_sessions(),
         lessons=load_lessons(),
+        skill_lines=skill_prompt_lines(),
     ))
     return "\n\n".join(sections)

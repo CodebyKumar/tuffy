@@ -60,12 +60,20 @@ def runtime_context(
     known_facts: dict,
     session_summaries: list,
     lessons: list,
+    skill_lines: list = None,
 ) -> str:
     """The dynamic part of the system prompt: tool signatures, long-term
-    memory, episodic session summaries, and self-learned lessons."""
+    memory, episodic session summaries, self-learned lessons, and installed
+    skills."""
     sections = []
 
     sections.append("TOOLS YOU CAN CALL\n" + "\n".join(tool_lines))
+
+    if skill_lines:
+        sections.append(
+            "SKILLS AVAILABLE (call read_skill(name) for full guidance when one "
+            "looks relevant to what the user is asking):\n" + "\n".join(skill_lines)
+        )
 
     if known_facts:
         facts_block = "\n".join(f"- {k}: {v}" for k, v in known_facts.items())
