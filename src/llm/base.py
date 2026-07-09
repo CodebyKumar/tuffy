@@ -17,6 +17,13 @@ only ever calls through this interface.
 from abc import ABC, abstractmethod
 
 
+class ProviderError(Exception):
+    """A recoverable failure to get a completion (API rate limit, network
+    error, bad credentials, ...). Callers should drop the current turn and
+    keep the session alive rather than crash, the same way a local decode
+    failure (RuntimeError) is handled."""
+
+
 class LLMProvider(ABC):
     def __init__(self, model_card: dict):
         self.model_card = model_card

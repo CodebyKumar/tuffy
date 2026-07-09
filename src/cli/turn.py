@@ -5,6 +5,7 @@ into session history."""
 from src.memory import extract_facts
 from src.cli.session import Session, keep_only_latest_image, trim_history, compact_turn
 from src.cli.display import Spinner, C_DIM, CLEAR_LINE, C_RESET
+from src.llm.base import ProviderError
 
 
 def run_turn(session: Session, user_input: str) -> bool:
@@ -52,6 +53,13 @@ def run_turn(session: Session, user_input: str) -> bool:
             f"{C_DIM}[Generation failed: {e}. The machine is likely low on "
             f"memory — close some apps and try again.]{C_RESET}\n"
         )
+        del messages[turn_start:]
+        return False
+    except ProviderError as e:
+        # API-model failure (rate limit, bad key, network error, ...); drop
+        # this turn instead of crashing the whole session.
+        spinner.stop()
+        print(f"{C_DIM}[Generation failed: {e}]{C_RESET}\n")
         del messages[turn_start:]
         return False
     except KeyboardInterrupt:

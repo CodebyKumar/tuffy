@@ -13,7 +13,7 @@ import os
 
 import requests
 
-from src.llm.base import LLMProvider
+from src.llm.base import LLMProvider, ProviderError
 
 _DEFAULT_TIMEOUT = 60
 
@@ -69,37 +69,61 @@ class OpenAICompatibleProvider(LLMProvider):
     def complete(self, **kwargs) -> dict:
         messages = kwargs.pop("messages")
         sampling_params = {**self.sampling_params, **kwargs}
-        resp = requests.post(
-            f"{self.base_url}/chat/completions",
-            headers=self._headers(),
-            json=self._payload(messages, stream=False, sampling_params=sampling_params),
-            timeout=_DEFAULT_TIMEOUT,
-        )
-        resp.raise_for_status()
+        try:
+            resp = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=self._headers(),
+                json=self._payload(messages, stream=False, sampling_params=sampling_params),
+                timeout=_DEFAULT_TIMEOUT,
+            )
+            resp.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise ProviderError(self._describe_error(e)) from e
         return resp.json()
 
     def stream_completion(self, messages: list, **sampling_params):
         params = sampling_params or self.sampling_params
-        resp = requests.post(
-            f"{self.base_url}/chat/completions",
-            headers=self._headers(),
-            json=self._payload(messages, stream=True, sampling_params=params),
-            stream=True,
-            timeout=_DEFAULT_TIMEOUT,
-        )
-        resp.raise_for_status()
+        try:
+            resp = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=self._headers(),
+                json=self._payload(messages, stream=True, sampling_params=params),
+                stream=True,
+                timeout=_DEFAULT_TIMEOUT,
+            )
+            resp.raise_for_status()
 
-        for line in resp.iter_lines():
-            if not line:
-                continue
-            decoded = line.decode("utf-8")
-            if not decoded.startswith("data:"):
-                continue
-            data = decoded[len("data:"):].strip()
-            if data == "[DONE]":
-                return
-            try:
-                chunk = json.loads(data)
-            except json.JSONDecodeError:
-                continue
-            yield chunk
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                decoded = line.decode("utf-8")
+                if not decoded.startswith("data:"):
+                    continue
+                data = decoded[len("data:"):].strip()
+                if data == "[DONE]":
+                    return
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                yield chunk
+        except requests.exceptions.RequestException as e:
+            raise ProviderError(self._describe_error(e)) from e
+
+    def _describe_error(self, e: requests.exceptions.RequestException) -> str:
+        if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
+            status = e.response.status_code
+            if status == 429:
+                return (
+                    f"'{self.model_card['id']}' is rate-limited (429 from "
+                    f"{self.base_url}). Wait a bit or switch models with /models."
+                )
+            if status in (401, 403):
+                return (
+                    f"'{self.model_card['id']}' rejected the request ({status}) — "
+                    f"check that {self.api_key_env} is a valid key."
+                )
+            return f"'{self.model_card['id']}' request failed with HTTP {status}."
+        if isinstance(e, requests.exceptions.Timeout):
+            return f"'{self.model_card['id']}' request timed out after {_DEFAULT_TIMEOUT}s."
+        return f"'{self.model_card['id']}' request failed: {e}"
