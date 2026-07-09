@@ -14,15 +14,14 @@ job and `main.py`'s alone. Every other package is usable headless.
 | [models/](models/) | `ModelRegistry` — model cards, load params, sampling params, rate-limit metadata. `configs/local.py` and `configs/api.py` hold the actual model card definitions; `weights/` holds gitignored GGUF files. |
 | [prompts/](prompts/) | Every system-prompt string, centralized: `personas.yaml` (static tone/rules) + `templates.py` (Python-built fragments). |
 | [tools/](tools/) | Native tools the agent can call, grouped by domain, plus the MCP client that registers external servers' tools the same way. |
-| [skills/](skills/) | Discovery/loading mechanism for `./skills/*/` capability packs (content lives at the repo root, not here). |
+| [skills/](skills/) | Discovery/loading mechanism for `./.tuffy/skills/*/` capability packs (content lives at the repo root, not here). |
 
 ## Environment variables
 
 API-provider models read their key from an environment variable named by the model card's
-`api_key_env` (see [llm/README.md](llm/README.md#api-keys)). [env.py](env.py) loads a `.env` file
-from the repo root into `os.environ` at startup, for anything not already exported in your
-shell — a real exported env var always wins over `.env`. `.env` is gitignored, so keys placed
-there are never committed.
+`api_key_env` (see [llm/README.md](llm/README.md#api-keys)). If it's not exported in your shell,
+the provider falls back to reading that one key out of a `.env` file at the repo root — a real
+exported env var always wins. `.env` is gitignored, so keys placed there are never committed.
 
 ## Request flow
 

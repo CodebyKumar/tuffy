@@ -25,7 +25,7 @@ _HELP_SECTIONS = [
     ("Inspect", [
         ("/memory", "show everything in long-term memory (facts, sessions, lessons)"),
         ("/tools", "list every tool the agent can call, grouped by domain"),
-        ("/skills", "list installed skills (drop new ones in ./skills/<name>/)"),
+        ("/skills", "list installed skills (drop new ones in ./.tuffy/skills/<name>/)"),
         ("/mcp", "list connected MCP servers and the tools they registered"),
         ("/status", "show the active model, vision support, and turn count"),
     ]),
@@ -189,7 +189,7 @@ def cmd_tools(session: Session):
 def cmd_skills(session: Session):
     skills = list_skills()
     if not skills:
-        print(f"{C_DIM}No skills installed. Drop a folder with a SKILL.md into ./skills/<name>/ and restart.{C_RESET}\n")
+        print(f"{C_DIM}No skills installed. Drop a folder with a SKILL.md into ./.tuffy/skills/<name>/ and restart.{C_RESET}\n")
         return
     print(f"{C_DIM}Installed skills:{C_RESET}")
     for name, info in skills.items():

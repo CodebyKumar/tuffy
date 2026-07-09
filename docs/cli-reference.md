@@ -17,7 +17,7 @@ Every slash command, grouped the same way `/help` groups them inside Tuffy. See
 |---|---|
 | `/memory` | Show everything in long-term memory: facts about you, recent session summaries, lessons learned. |
 | `/tools` | List every tool the agent can call, grouped by domain (native and MCP). |
-| `/skills` | List installed skills. Drop a new one in `./skills/<name>/` and restart to add more. |
+| `/skills` | List installed skills. Drop a new one in `./.tuffy/skills/<name>/` and restart to add more. |
 | `/mcp` | List connected MCP servers and the tools each one registered. |
 | `/status` | Show the active model, vision support, turn count, estimated context usage (vs. the model's max), and rate limits (API models). |
 

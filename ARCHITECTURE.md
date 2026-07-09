@@ -228,7 +228,10 @@ src/
     openai_compatible_provider.py  Any OpenAI-wire-format API backend
   models/
     registry.py            ModelRegistry — uniform card shape for local + API models
-    __init__.py             Where models actually get registered
+    __init__.py             DEFAULT_MODEL + imports configs/local.py and configs/api.py
+    configs/
+      local.py                Local (llama.cpp/gguf) model cards
+      api.py                   API-provider (openai_compatible) model cards
     weights/                 Local model weight files (gitignored)
   prompts/
     templates.py            All prompt-string builders
@@ -244,7 +247,9 @@ src/
   skills/
     loader.py                Skill discovery/loading — §2.2
     __init__.py                Registers the read_skill tool
-skills/                   Droppable skill packs (content; the mechanism lives in src/skills/)
+.tuffy/
+  skills/                 Droppable skill packs (content; the mechanism lives in src/skills/)
+  mcp.json                MCP server config (gitignored)
 docs/                     Configuration how-tos (models, MCP, skills, tools, CLI reference)
 data/memory/              JSON-backed long-term memory store
 agent_workspace/          Sandboxed file I/O root every file/code tool is scoped to

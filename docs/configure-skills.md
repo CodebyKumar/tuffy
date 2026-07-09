@@ -7,7 +7,7 @@ guidance, or guidance plus its own tools/MCP server — without touching core co
 ## 1. Create the folder
 
 ```
-skills/
+.tuffy/skills/
   my-skill/
     SKILL.md    required
     tools.py    optional
@@ -54,7 +54,7 @@ def my_skill_helper(arg: str) -> str:
 
 ## 4. (Optional) Add mcp.json
 
-A single MCP server config (same shape as an entry in `mcp_servers.json` — see
+A single MCP server config (same shape as an entry in `.tuffy/mcp.json` — see
 [configure-mcp.md](configure-mcp.md)) that this skill wants connected. Tuffy merges it into the
 MCP client's server list at startup automatically.
 
@@ -66,5 +66,5 @@ that should trigger the skill and confirm the model calls `read_skill` before ac
 
 ## Example
 
-[skills/code-review/](../skills/code-review/) is a minimal working example: guidance-only, no
-`tools.py` or `mcp.json`.
+[.tuffy/skills/code-review/](../.tuffy/skills/code-review/) is a minimal working example:
+guidance-only, no `tools.py` or `mcp.json`.

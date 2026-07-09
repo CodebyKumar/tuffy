@@ -7,8 +7,8 @@ implementation.
 
 ## 1. Create the config file
 
-Create `mcp_servers.json` in the repo root (it's gitignored — safe to put secrets in it). It's
-either a bare JSON list of server configs, or `{"servers": [...]}`:
+Create `.tuffy/mcp.json` (it's gitignored — safe to put secrets in it). It's either a bare JSON
+list of server configs, or `{"servers": [...]}`:
 
 ```json
 [
@@ -57,7 +57,7 @@ to see them alongside native tools, under a `MCP: <server-name>` header.
 A skill (see [configure-skills.md](configure-skills.md)) can ship its own `mcp.json` — one
 server config, same shape as an entry above — inside its folder. Tuffy merges every loaded
 skill's `mcp.json` into the same connection list at startup, so a skill can bring its own MCP
-server without the user hand-editing `mcp_servers.json`.
+server without the user hand-editing `.tuffy/mcp.json`.
 
 ## Notes
 

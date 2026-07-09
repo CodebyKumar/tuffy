@@ -32,8 +32,8 @@ agent_workspace/
 *.vsix
 
 # Local MCP server config (may contain commands/env referencing local paths or secrets)
-mcp_servers.json
+.tuffy/mcp.json
 
-# API keys / secrets loaded by src/env.py
+# API keys / secrets, read directly by src/llm/openai_compatible_provider.py
 .env
 

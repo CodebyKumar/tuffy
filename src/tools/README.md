@@ -17,7 +17,7 @@ needs to change to make a new tool visible to the model.
 - [system.py](system.py) - `get_system_stats`, `top_processes`, `capture_image`, `view_image`.
   Group: `system`.
 - [mcp_client.py](mcp_client.py) - bridges the async-only MCP Python SDK into this synchronous
-  registry: reads `./mcp_servers.json` (gitignored — see
+  registry: reads `./.tuffy/mcp.json` (gitignored — see
   [docs/configure-mcp.md](../../docs/configure-mcp.md) for the config shape) plus each loaded
   skill's `mcp.json`, connects over stdio, and registers each remote tool as `<server>_<tool>`
   under group `mcp:<server>`. A server that fails to connect is skipped with a warning rather

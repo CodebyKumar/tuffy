@@ -1,9 +1,10 @@
 # src/skills/
 
 The skills *mechanism* — discovery, loading, and the `read_skill` tool. For the skills
-*content* (droppable capability packs), see [/skills](../../skills/) at the repo root.
+*content* (droppable capability packs), see [.tuffy/skills/](../../.tuffy/skills/) at the repo
+root.
 
-- [loader.py](loader.py) - `discover_skills()` scans `./skills/*/`, parses each `SKILL.md`'s
+- [loader.py](loader.py) - `discover_skills()` scans `./.tuffy/skills/*/`, parses each `SKILL.md`'s
   YAML frontmatter + body, auto-imports each skill's optional `tools.py` as a side effect, and
   returns `{name: {description, body, path}}`. Also exposes `skill_prompt_lines()` (one line
   per skill for the system prompt) and `mcp_configs_from_skills()` (each skill's optional

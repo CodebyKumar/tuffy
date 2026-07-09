@@ -83,11 +83,11 @@ just displayed so you know your headroom. The provider's own API still returns `
 exceed its real limits; see below for what happens when it does.
 
 Then, before switching to it: `export MY_PROVIDER_API_KEY=...`, or add it to `.env` in the repo
-root (`MY_PROVIDER_API_KEY=...`) — Tuffy loads `.env` automatically at startup via
-[src/env.py](../src/env.py), filling in any variable not already exported in your shell. A real
-exported env var always takes precedence over `.env`. See
-[src/README.md](../src/README.md#environment-variables) for details. `.env` is gitignored, so the
-key is never committed.
+root (`MY_PROVIDER_API_KEY=...`). The `openai_compatible` provider's `load()` checks
+`os.environ` first, then falls back to reading that one key out of `.env` if the shell doesn't
+have it — a real exported env var always takes precedence. See
+[src/llm/README.md](../src/llm/README.md#api-keys) for details. `.env` is gitignored, so the key
+is never committed.
 
 Switching with `/models my-provider-model-name` loads the new provider *before* unloading the
 current one, so a bad switch (missing/invalid API key) leaves you on the previously working model

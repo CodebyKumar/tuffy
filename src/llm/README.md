@@ -33,10 +33,12 @@ they only see the model card's `provider` field and this interface.
 
 Read from environment variables only, named by the model card's `api_key_env` — never written
 to a file in the repo, never logged. That variable can be exported in your shell, or placed in
-a `.env` file at the repo root (gitignored); [src/env.py](../env.py) loads `.env` into
-`os.environ` at startup for anything not already exported, so a real exported var always wins.
-See [src/models/configs/api.py](../models/configs/api.py) for the env vars the registered API
-model cards expect.
+a `.env` file at the repo root (gitignored); `OpenAICompatibleProvider.load()`
+([openai_compatible_provider.py](openai_compatible_provider.py)) checks `os.environ` first, then
+falls back to reading that one key out of `.env` if the shell doesn't have it — no separate
+loader module, no dependency, and a real exported var always wins. See
+[src/models/configs/api.py](../models/configs/api.py) for the env vars the registered API model
+cards expect.
 
 A failed API call (rate limit, bad key, network error, timeout) raises `ProviderError`
 (defined in [base.py](base.py)) rather than a raw `requests` exception, so

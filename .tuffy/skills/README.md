@@ -1,11 +1,11 @@
-# skills/
+# .tuffy/skills/
 
 Droppable capability packs. Each subfolder here teaches Tuffy how to approach a kind of task —
-no core code changes needed. See [src/skills/](../src/skills/) for the loading mechanism this
+no core code changes needed. See [src/skills/](../../src/skills/) for the loading mechanism this
 folder is scanned by.
 
 ```
-skills/
+.tuffy/skills/
   <name>/
     SKILL.md    required — YAML frontmatter (name, description) + a markdown body of guidance
     tools.py    optional — plain @registry.register(...) functions, auto-imported at startup
@@ -14,7 +14,7 @@ skills/
 
 ## Adding a skill
 
-1. Create `skills/<name>/SKILL.md` with frontmatter:
+1. Create `.tuffy/skills/<name>/SKILL.md` with frontmatter:
    ```yaml
    ---
    name: my-skill
@@ -27,7 +27,7 @@ skills/
 2. (Optional) Add `tools.py` with `@registry.register(...)` functions, exactly like
    `src/tools/*.py` — same decorator, same registry, zero new mechanism to learn.
 3. (Optional) Add `mcp.json` — a single `{name, command, args, env}` server config (same shape
-   as `mcp_servers.json` at the repo root) this skill wants connected.
+   as `.tuffy/mcp.json` at the repo root) this skill wants connected.
 4. Restart Tuffy. Check `/skills` lists it and, if it has one, that its `read_skill` description
    shows up correctly.
 

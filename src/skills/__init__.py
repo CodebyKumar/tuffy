@@ -1,5 +1,5 @@
 """Skills package: discover_skills() (called once at startup by main.py)
-scans ./skills/*/ and registers this module's read_skill tool alongside
+scans ./.tuffy/skills/*/ and registers this module's read_skill tool alongside
 whatever tools.py each skill ships. See loader.py for the on-disk format."""
 
 from src.tools.registry import registry

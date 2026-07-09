@@ -6,9 +6,6 @@ import os
 import sys
 import traceback
 
-from src.env import load_dotenv
-load_dotenv()  # fills os.environ from ./.env for anything not already exported
-
 from src.models import DEFAULT_MODEL
 from src.models.registry import registry as model_registry
 from src.skills.loader import discover_skills, mcp_configs_from_skills
@@ -22,12 +19,12 @@ from src.cli.commands import handle_command
 from src.cli.turn import run_turn
 from src.cli.display import print_logo, print_session_info, C_DIM, C_USER, C_RESET
 
-# Scans ./skills/*/ and auto-imports each skill's tools.py before the first
-# system prompt is built, so skill descriptions and skill-provided tools are
-# both present from the very first turn.
+# Scans ./.tuffy/skills/*/ and auto-imports each skill's tools.py before the
+# first system prompt is built, so skill descriptions and skill-provided
+# tools are both present from the very first turn.
 discover_skills()
 
-# Connects to any MCP servers configured in ./mcp_servers.json (gitignored —
+# Connects to any MCP servers configured in ./.tuffy/mcp.json (gitignored —
 # see docs/configure-mcp.md) plus each loaded skill's own mcp.json, if any. A
 # no-op when no servers are configured. Must run after discover_skills() (so
 # skills' mcp.json files are known) and before the first system prompt is

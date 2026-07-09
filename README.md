@@ -20,11 +20,11 @@ MCP servers, skills, tools). Most folders below have their own README with more 
 - **Coding & editing**: `edit_file` for targeted changes (not just whole-file overwrites),
   `run_python`/`run_shell` (sandboxed, allowlisted) and `git_status`/`git_diff`/`git_commit` for
   working on real code in the workspace.
-- **Skills**: drop a folder with a `SKILL.md` into `./skills/<name>/` to teach Tuffy how to
+- **Skills**: drop a folder with a `SKILL.md` into `./.tuffy/skills/<name>/` to teach Tuffy how to
   approach a kind of task (optionally shipping its own tools or an MCP server to connect) — no
   core code changes needed. See `/skills` and [docs/configure-skills.md](docs/configure-skills.md).
 - **MCP client**: connect any MCP server (filesystem, GitHub, browser, etc.) by listing it in
-  `mcp_servers.json` — its tools show up alongside Tuffy's native ones automatically. See `/mcp`
+  `.tuffy/mcp.json` — its tools show up alongside Tuffy's native ones automatically. See `/mcp`
   and [docs/configure-mcp.md](docs/configure-mcp.md).
 - **Categorized CLI**: `/help` groups commands by what they do (Chat, Inspect, Models, Session)
   instead of one flat list; `/status` shows the active model and session state at a glance.
@@ -48,7 +48,7 @@ Run `/help` inside Tuffy for the full categorized list, or see
 **Inspect**
 - `/memory` - Show everything in long-term memory (facts about you, recent sessions, lessons learned).
 - `/tools` - List all tools the agent can call, grouped by domain.
-- `/skills` - List installed skills (drop new ones in `./skills/<name>/`).
+- `/skills` - List installed skills (drop new ones in `./.tuffy/skills/<name>/`).
 - `/mcp` - List connected MCP servers and the tools they registered.
 - `/status` - Show the active model, vision support, turn count, estimated context usage, and rate limits (API models).
 
@@ -86,21 +86,21 @@ model (place its weight file under `src/models/weights/`) in
 [src/models/configs/api.py](src/models/configs/api.py), then set it as `DEFAULT_MODEL` (in
 [src/models/__init__.py](src/models/__init__.py)) or switch to it at runtime with `/models <id>`.
 For API models, put the provider's API key in `.env` at the repo root (e.g.
-`GROQ_API_KEY=...`) — Tuffy loads it automatically at startup, no manual `export` needed. Full
-walkthrough (including rate-limit metadata for hosted models):
-[docs/configure-models.md](docs/configure-models.md).
+`GROQ_API_KEY=...`) — the API provider reads it from there automatically if it's not already
+exported in your shell, no manual `export` needed. Full walkthrough (including rate-limit
+metadata for hosted models): [docs/configure-models.md](docs/configure-models.md).
 
 ### 4. (Optional) Connecting MCP servers
-See [docs/configure-mcp.md](docs/configure-mcp.md) — create `mcp_servers.json` (gitignored) and
+See [docs/configure-mcp.md](docs/configure-mcp.md) — create `.tuffy/mcp.json` (gitignored) and
 list any MCP servers you want connected. Tuffy connects to each one at startup and registers its
 tools as `<server>_<tool>`; a server that fails to connect is skipped with a warning and never
 blocks startup.
 
 ### 5. (Optional) Adding skills
-See [docs/configure-skills.md](docs/configure-skills.md) — drop a folder into `./skills/<name>/`
-with a `SKILL.md` (YAML frontmatter with `name`/`description`, plus a markdown body of
-guidance). Optionally add a `tools.py` or an `mcp.json`. See `skills/code-review/` for a working
-example.
+See [docs/configure-skills.md](docs/configure-skills.md) — drop a folder into
+`./.tuffy/skills/<name>/` with a `SKILL.md` (YAML frontmatter with `name`/`description`, plus a
+markdown body of guidance). Optionally add a `tools.py` or an `mcp.json`. See
+`.tuffy/skills/code-review/` for a working example.
 
 ### 6. Running the Agent
 Run the main script to start your chat session:
@@ -108,14 +108,39 @@ Run the main script to start your chat session:
 python3 main.py
 ```
 
+### 7. (Optional) Running Tuffy from anywhere with a `tuffy` command
+Add a shell function to your `~/.zshrc` (or `~/.bashrc`) so typing `tuffy` in any terminal starts
+the agent, regardless of your current directory:
+```bash
+tuffy() {
+  local project_dir="/absolute/path/to/tuffy"
+  local python_bin="$project_dir/.venv/bin/python3"
+  [ -x "$python_bin" ] || python_bin="python3"
+  (cd "$project_dir" && "$python_bin" main.py)
+}
+```
+Then `source ~/.zshrc` (or open a new terminal tab) once. It runs in a subshell, so your working
+directory is untouched after Tuffy exits, and it prefers the project's own `.venv` python if one
+exists.
+
+### 8. (Jetson Orin) One-shot setup
+If you're deploying Tuffy on a Jetson Orin (e.g. copied over via a pendrive rather than
+`git clone`), run [scripts/setup_jetson.sh](scripts/setup_jetson.sh) instead of steps 2–6 above —
+it installs `uv` if missing, runs `uv sync`, rebuilds `llama-cpp-python` with CUDA support for
+the Tegra GPU (a wheel built on another machine won't have Jetson's GPU backend), and launches
+the app:
+```bash
+bash scripts/setup_jetson.sh
+```
+Re-run it any time after pulling new dependencies or model weights — it's idempotent.
+
 ---
 
 ## Project Structure
 
 ```
-main.py                 Entry point: loads .env, startup wiring (skills/MCP discovery), then the input loop
+main.py                 Entry point: startup wiring (skills/MCP discovery), then the input loop
 src/
-  env.py                 Loads .env into os.environ (real env vars always take precedence)
   cli/                  Interactive terminal chat: banner, spinner, slash commands, turn loop
   agent.py              LocalAgent — the provider-agnostic ReAct tool-calling loop
   identity.py           Fixed self-model (name, capabilities) — never LLM-written
@@ -125,12 +150,16 @@ src/
   models/                Model registry; configs/local.py + configs/api.py hold model cards; weights/ holds gitignored model weight files
   prompts/               All system-prompt text: personas.yaml + templates.py
   tools/                 Native tools by domain (editing/coding/research/system) + MCP client
-  skills/                Discovery/loading for ./skills/*/ capability packs
-skills/                 Droppable capability packs (SKILL.md + optional tools.py/mcp.json)
+  skills/                Discovery/loading for ./.tuffy/skills/*/ capability packs
+.tuffy/                 Agent-owned config (gitignored where noted), industry-standard dotfolder pattern
+  skills/                Droppable capability packs (SKILL.md + optional tools.py/mcp.json)
+  mcp.json                MCP server config (gitignored)
 docs/                   Configuration guides (models, MCP, skills, tools, CLI reference)
+scripts/                Setup scripts (setup_jetson.sh — bootstrap + run on Jetson Orin)
 data/memory/            JSON-backed long-term memory store
 agent_workspace/        Sandboxed file I/O root for the agent's file/code tools
-.env                    API keys (gitignored) — loaded automatically at startup
+.env                    API keys (gitignored) — read by the API provider if not already exported
+.env.example            Template for .env — copy and fill in your keys
 ```
 
 Every folder above has its own README with more detail — start at [src/README.md](src/README.md)

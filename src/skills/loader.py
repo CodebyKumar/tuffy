@@ -1,4 +1,4 @@
-"""Skills: droppable capability packs under ./skills/<name>/.
+"""Skills: droppable capability packs under ./.tuffy/skills/<name>/.
 
 A skill is a directory containing:
   SKILL.md    required. YAML frontmatter (name, description) + a markdown
@@ -15,7 +15,7 @@ A skill is a directory containing:
               list at startup.
 
 Nothing here executes untrusted code beyond what the user already put in
-their own ./skills/ directory — same trust boundary as src/tools/*.py.
+their own ./.tuffy/skills/ directory — same trust boundary as src/tools/*.py.
 """
 
 import importlib.util
@@ -24,7 +24,7 @@ import os
 
 import yaml
 
-SKILLS_DIR = "./skills"
+SKILLS_DIR = "./.tuffy/skills"
 
 _loaded_skills = {}  # name -> {"description": str, "body": str, "path": str}
 

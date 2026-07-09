@@ -1,6 +1,6 @@
 """MCP client: connects to external MCP servers (stdio transport) configured
-in mcp_servers.json (repo root, gitignored — see docs/configure-mcp.md)
-plus any skills/<name>/mcp.json, and registers each server's tools into the
+in .tuffy/mcp.json (gitignored — see docs/configure-mcp.md) plus any
+.tuffy/skills/<name>/mcp.json, and registers each server's tools into the
 same ToolRegistry native tools use, under group="mcp:<server-name>". From the
 model's point of view an MCP tool and a native tool are indistinguishable —
 same registry, same dispatch path in src/agent.py.
@@ -23,14 +23,14 @@ from mcp.client.stdio import stdio_client
 
 from src.tools.registry import registry
 
-MCP_CONFIG_PATH = "./mcp_servers.json"
+MCP_CONFIG_PATH = "./.tuffy/mcp.json"
 _CALL_TIMEOUT_SECONDS = 30
 
 _connected_servers = []  # names of servers successfully connected, for /tools-adjacent diagnostics
 
 
 def _load_server_configs() -> list[dict]:
-    """Reads mcp_servers.json (a JSON list of {name, command, args?, env?}),
+    """Reads .tuffy/mcp.json (a JSON list of {name, command, args?, env?}),
     matching the Claude Desktop/Code config shape. Missing file means no
     servers configured — not an error."""
     if not os.path.isfile(MCP_CONFIG_PATH):
@@ -168,7 +168,7 @@ _bridge = _MCPBridge()
 
 def connect_mcp_servers(extra_configs: list[dict] = None) -> list[str]:
     """Starts the bridge thread (once) and connects to every server in
-    mcp_servers.json plus any extra_configs (e.g. from skills' mcp.json).
+    .tuffy/mcp.json plus any extra_configs (e.g. from skills' mcp.json).
     Safe to call with no config file and no extra_configs present — a no-op
     returning an empty list. Call once at startup, after tool/skill
     discovery and before the first system prompt is built, so MCP tools show
