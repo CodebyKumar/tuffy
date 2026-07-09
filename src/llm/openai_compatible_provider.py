@@ -5,7 +5,9 @@ api_key_env + model_name — no provider-specific SDK, just requests.
 
 The API key is read from the environment variable named in provider_config at
 load() time only; it is never written to disk, logged, or echoed back in any
-tool output or trace.
+tool output or trace. If it's not already exported in the shell, load() falls
+back to reading it from a .env file in the repo root (KEY=value per line) —
+a real exported var always takes precedence.
 """
 
 import json
@@ -16,6 +18,24 @@ import requests
 from src.llm.base import LLMProvider, ProviderError
 
 _DEFAULT_TIMEOUT = 60
+_DOTENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")
+
+
+def _read_dotenv_key(key: str) -> str | None:
+    """Reads a single KEY=value out of .env without pulling in a dependency
+    or loading the whole file into os.environ — just enough to fall back on
+    when the caller hasn't exported the var themselves."""
+    if not os.path.isfile(_DOTENV_PATH):
+        return None
+    with open(_DOTENV_PATH, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            file_key, _, value = line.partition("=")
+            if file_key.strip() == key:
+                return value.strip().strip("'\"")
+    return None
 
 
 class OpenAICompatibleProvider(LLMProvider):
@@ -29,11 +49,12 @@ class OpenAICompatibleProvider(LLMProvider):
         self._api_key = None
 
     def load(self) -> None:
-        api_key = os.environ.get(self.api_key_env)
+        api_key = os.environ.get(self.api_key_env) or _read_dotenv_key(self.api_key_env)
         if not api_key:
             raise ValueError(
                 f"Environment variable '{self.api_key_env}' is not set — required to use "
-                f"model '{self.model_card['id']}'. Export it and try again."
+                f"model '{self.model_card['id']}'. Export it, or add it to .env in the "
+                f"repo root, and try again."
             )
         self._api_key = api_key
 
