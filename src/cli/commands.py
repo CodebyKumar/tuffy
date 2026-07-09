@@ -11,7 +11,7 @@ from src.tools.mcp_client import connected_servers, MCP_CONFIG_PATH
 from src.models.registry import registry as model_registry
 from src.skills.loader import list_skills
 from src.vision import encode_image_to_data_uri
-from src.cli.session import Session
+from src.cli.session import Session, estimate_tokens
 from src.cli.display import C_DIM, C_SUCCESS, C_WARN, C_BLUE, C_BOLD, C_RESET
 
 # --- /help -------------------------------------------------------------
@@ -123,6 +123,10 @@ def cmd_models(session: Session, arg: str):
             print(f"  {'base_url':14}: {cfg['base_url']}")
             print(f"  {'model_name':14}: {cfg['model_name']}")
             print(f"  {'api_key_env':14}: {cfg['api_key_env']} ({'set' if os.environ.get(cfg['api_key_env']) else 'NOT SET'})")
+            limits = card.get("rate_limits") or {}
+            if limits:
+                print(f"  {'rate limits':14}: {limits['requests_per_minute']} req/min, {limits['requests_per_day']:,} req/day, "
+                      f"{limits['tokens_per_minute']:,} tok/min, {limits['tokens_per_day']:,} tok/day")
         print()
         return
 
@@ -222,12 +226,23 @@ def cmd_status(session: Session):
     card = model_registry.get(session.current_model_id)
     vision = "yes" if session.agent.supports_vision else "no"
     turns = sum(1 for m in session.messages if m["role"] == "user")
+    used_tokens = estimate_tokens(session.messages)
+    context_length = card.get("context_length")
     print(f"{C_SUCCESS}Session status{C_RESET}")
     print(f"  model       : {card['name']} ({session.current_model_id})")
     print(f"  provider    : {card['provider']}")
     print(f"  vision      : {vision}")
     print(f"  turns so far: {turns}")
     print(f"  pending img : {'yes' if session.pending_image_data_uri else 'no'}")
+    if context_length:
+        pct = used_tokens / context_length * 100
+        print(f"  context used: ~{used_tokens:,} / {context_length:,} tok ({pct:.1f}%, estimated)")
+    else:
+        print(f"  context used: ~{used_tokens:,} tok (estimated; model has no declared max)")
+    limits = card.get("rate_limits") or {}
+    if limits:
+        print(f"  rate limits : {limits['requests_per_minute']} req/min, {limits['requests_per_day']:,} req/day, "
+              f"{limits['tokens_per_minute']:,} tok/min, {limits['tokens_per_day']:,} tok/day")
     print()
 
 
