@@ -40,6 +40,15 @@ registry.register(
         # penalty keeps answers fresh without derailing tool-call syntax.
         "temperature": 0.3,
         "repeat_penalty": 1.1,
+        # The chat template's eos_token (<|im_end|>) is what should stop
+        # generation, but a small quantized model occasionally drifts past it
+        # and starts emitting the literal text of the NEXT turn's role marker
+        # ("<|im_start|>user\n...") as if it were still answering — the
+        # observed symptom is a reply that's just the bare word "user". These
+        # stop strings are a text-level backstop: the moment any of them
+        # appears, llama.cpp cuts generation instead of letting it continue
+        # into a leaked template fragment.
+        "stop": ["<|im_start|>", "<|im_end|>"],
     },
 )
 
@@ -75,5 +84,14 @@ registry.register(
         # penalty keeps answers fresh without derailing tool-call syntax.
         "temperature": 0.3,
         "repeat_penalty": 1.1,
+        # The chat template's eos_token (<|im_end|>) is what should stop
+        # generation, but a small quantized model occasionally drifts past it
+        # and starts emitting the literal text of the NEXT turn's role marker
+        # ("<|im_start|>user\n...") as if it were still answering — the
+        # observed symptom is a reply that's just the bare word "user". These
+        # stop strings are a text-level backstop: the moment any of them
+        # appears, llama.cpp cuts generation instead of letting it continue
+        # into a leaked template fragment.
+        "stop": ["<|im_start|>", "<|im_end|>"],
     },
 )
