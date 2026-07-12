@@ -190,6 +190,20 @@ def force_final_answer() -> str:
     )
 
 
+def degenerate_reply_correction() -> str:
+    """Observation injected when the model's draft answer collapsed into a
+    bare chat-role word ('user'/'assistant'/'system') instead of real
+    content — a known small-model failure mode where the next-token
+    distribution drifts onto a role-label token straight after the
+    PROTOCOL EXAMPLES block's User:/Assistant: lines. Asks for a genuine
+    retry rather than showing the stray token to the user."""
+    return (
+        "Observation: your draft answer wasn't a real response — it came out empty "
+        "or as just a stray word. Write your actual answer now, in plain text, "
+        "responding to what the user actually said."
+    )
+
+
 def foreign_script_correction() -> str:
     """Observation injected when the model hand-wrote non-Latin script that
     didn't come from a tool (its own non-English output is unreliable)."""

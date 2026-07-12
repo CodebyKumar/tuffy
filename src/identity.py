@@ -12,8 +12,9 @@ AGENT_NAME = "Tuffy"
 AGENT_TAGLINE = "a tool-using AI agent"
 
 # Keys that must never be written into user memory by the automatic fact
-# extractor (src/memory.py's extract_facts) — these describe the agent
-# itself, not the user, no matter what phrasing they show up under.
+# extractor (elastimem's background extraction, passed in as reserved_keys
+# when src/memory.py opens the store) — these describe the agent itself,
+# not the user, no matter what phrasing they show up under.
 #
 # Deliberately excludes bare "name"/"role"/"title": those are legitimate
 # facts ABOUT THE USER too (the user's own name, job title, etc.), so a blanket

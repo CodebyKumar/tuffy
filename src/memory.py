@@ -1,78 +1,34 @@
 """Long-term memory adapter wrapping the Elastimem framework."""
 
 import os
-import json
-import shutil
+import re
 import elastimem
 from datetime import datetime
 from src.identity import RESERVED_IDENTITY_KEYS
 from src.tools.registry import registry
 
+# Every model card's persona instructs the model to always open a reply with
+# a <think>...</think> block (see personas.yaml) - a habit strong enough
+# that the model applies it even to Elastimem's one-off background prompts
+# (fact extraction, session/rolling summaries), which never ask for one and
+# have no code path to strip it themselves. Left unstripped, raw reasoning
+# text gets stored as if it were the actual output - e.g. a session summary
+# starting with "<think>\nOkay, let's see..." - and then re-injected into
+# future prompts verbatim. Mirrors the stripping src/agent.py's streaming
+# path already does for the interactive chat answer.
+#
+# Background completions use a much tighter max_tokens than the interactive
+# chat path (see ElastimemConfig.worker_max_tokens) - a model that rambles in
+# its <think> block routinely gets cut off before ever emitting </think>, so
+# a second pattern drops a trailing unclosed <think> (open tag with no
+# matching close anywhere after it) rather than only ever matching complete
+# open/close pairs.
+_THINK_PATTERN = re.compile(r"<think>\s*.*?\s*</think>", re.DOTALL)
+_UNCLOSED_THINK_PATTERN = re.compile(r"<think>.*$", re.DOTALL)
+
 DB_DIR = "./data/memory"
 os.makedirs(DB_DIR, exist_ok=True)
 DB_PATH = os.path.join(DB_DIR, "tuffy.db")
-
-is_new_db = not os.path.exists(DB_PATH)
-
-def _migrate_legacy_json(mem_store):
-    legacy_dir = os.path.join(DB_DIR, "legacy-json.bak")
-    profile_path = os.path.join(DB_DIR, "user", "profile.json")
-    notes_path = os.path.join(DB_DIR, "user", "notes.json")
-    lessons_path = os.path.join(DB_DIR, "agent", "lessons.json")
-    quarantine_path = os.path.join(DB_DIR, "quarantine.json")
-    sessions_path = os.path.join(DB_DIR, "sessions", "log.json")
-    
-    # Check if we have legacy data to migrate
-    has_legacy = any(os.path.exists(p) for p in (profile_path, notes_path, lessons_path, quarantine_path, sessions_path))
-    if not has_legacy:
-        return
-        
-    os.makedirs(legacy_dir, exist_ok=True)
-    
-    # 1. Profile facts
-    if os.path.exists(profile_path):
-        try:
-            with open(profile_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    for k, v in data.items():
-                        mem_store.remember(k, str(v), source="import")
-        except Exception as e:
-            print(f"Error migrating profile: {e}")
-            
-    # 2. Notes facts
-    if os.path.exists(notes_path):
-        try:
-            with open(notes_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    for k, v in data.items():
-                        mem_store.remember(k, str(v), source="import")
-        except Exception as e:
-            print(f"Error migrating notes: {e}")
-            
-    # 3. Lessons
-    if os.path.exists(lessons_path):
-        try:
-            with open(lessons_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    for lesson in data:
-                        mem_store.add_lesson(str(lesson))
-        except Exception as e:
-            print(f"Error migrating lessons: {e}")
-
-    # Move files to backup
-    for p in (profile_path, notes_path, lessons_path, quarantine_path, sessions_path):
-        if os.path.exists(p):
-            try:
-                dest = os.path.join(legacy_dir, os.path.basename(p))
-                if os.path.dirname(p).endswith("user") or os.path.dirname(p).endswith("agent") or os.path.dirname(p).endswith("sessions"):
-                    subdir = os.path.basename(os.path.dirname(p))
-                    dest = os.path.join(legacy_dir, f"{subdir}_{os.path.basename(p)}")
-                shutil.move(p, dest)
-            except Exception as e:
-                print(f"Error moving {p} to backup: {e}")
 
 # Initialize singleton store. 4096 matches today's default local model
 # (src/models/configs/local.py); attach_llm() below corrects this to the
@@ -84,9 +40,6 @@ mem = elastimem.open(
     reserved_keys=frozenset(RESERVED_IDENTITY_KEYS),
 )
 
-if is_new_db:
-    _migrate_legacy_json(mem)
-
 def _adapt(agent_complete):
     def llm(prompt, *, max_tokens, temperature):
         r = agent_complete(
@@ -94,7 +47,10 @@ def _adapt(agent_complete):
             max_tokens=max_tokens,
             temperature=temperature
         )
-        return r["choices"][0]["message"]["content"]
+        content = r["choices"][0]["message"]["content"] or ""
+        content = _THINK_PATTERN.sub("", content)
+        content = _UNCLOSED_THINK_PATTERN.sub("", content)
+        return content.strip()
     return llm
 
 def attach_llm(complete_fn):
@@ -110,37 +66,27 @@ def reconfigure_for_model(model_card: dict, static_prompt_tokens: int = None) ->
     silently stay pinned to whatever context_tokens was set at import time
     (4096) even after switching to e.g. a 131k-context API model. See
     elastimem's docs/integration.md ("If your host can switch models
-    mid-session") for why this isn't automatic."""
+    mid-session") for why this isn't automatic.
+
+    reprobe=True: the memory store is constructed at import time, before any
+    model is chosen, so its startup RAM reading predates a local model
+    claiming its share. Called here right after a model finishes loading
+    (this is that exact moment for both the initial load in main.py and
+    every /models switch), so the tier reflects real post-load memory
+    pressure from the first turn - not a stale pre-load guess. No-op cost
+    for API models (unloading/loading one changes credentials, not RAM), but
+    harmless to call every time rather than branching on provider type."""
     context_length = model_card.get("context_length") or 4096
     overrides = {"context_tokens": context_length}
     if static_prompt_tokens is not None:
         overrides["static_prompt_tokens"] = static_prompt_tokens
-    mem.reconfigure(**overrides)
-
-# --- Re-export legacy API ---
-
-def load_memory() -> dict:
-    return mem.facts()
+    mem.reconfigure(reprobe=True, **overrides)
 
 def store_fact(key: str, value: str, source: str = "explicit") -> tuple[bool, str]:
     return mem.remember(key, value, source)
 
-def load_sessions(n: int = 3) -> list[str]:
-    # Recent session summaries, oldest first
-    return [s["summary"] for s in mem.sessions(n) if s.get("summary")][::-1]
-
-def add_session_summary(summary: str) -> None:
-    # No-op since session summaries are now generated by mem.end_session()
-    pass
-
-def load_lessons() -> list[str]:
-    return mem.lessons()
-
 def add_lesson(lesson: str) -> None:
     mem.add_lesson(lesson)
-
-def load_quarantine(n: int = 20) -> list[dict]:
-    return mem.quarantine_entries(n)
 
 def clear_memory() -> None:
     """Closes, archives the DB file, and opens a fresh memory database."""
@@ -165,14 +111,6 @@ def clear_memory() -> None:
         context_tokens=4096,
         reserved_keys=frozenset(RESERVED_IDENTITY_KEYS),
     )
-
-def extract_facts(complete_fn, user_text: str, assistant_text: str) -> dict:
-    # No-op: handled in background by record_turn
-    return {}
-
-def summarize_session(complete_fn, messages: list) -> str:
-    # No-op: handled by end_session
-    return ""
 
 # --- Register tools ---
 

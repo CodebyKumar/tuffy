@@ -28,6 +28,26 @@ _TOOL_CALL_OPEN = "<tool_call>"
 # tool (i.e. the translate tool) this turn.
 _FOREIGN_SCRIPT_PATTERN = re.compile(r"[Ͱ-῿⺀-퟿]")
 
+# A known small-model failure mode: the reply starts with a leaked chat-role
+# token — either the ENTIRE reply is just the bare word (sometimes with
+# trailing whitespace/punctuation), or the role word leaks as a prefix
+# before the model recovers and continues with real content a line later
+# ("user\nI'm Tuffy, ..."). Both come from the same cause: the PROTOCOL
+# EXAMPLES block's literal "User:"/"Assistant:" lines pull the next-token
+# distribution onto a role-label token right at the start of generation.
+# Empty output is the same failure (nothing was said at all). Deliberately
+# anchored to the START of the reply and requires a line break or full-string
+# match after the role word, so a real answer that merely CONTAINS "user"
+# (e.g. "as a user, you can...") is never touched.
+_DEGENERATE_PREFIX_PATTERN = re.compile(
+    r"^(user|assistant|system)([\s:.,!?]*$|\s*\n)", re.IGNORECASE
+)
+
+
+def _is_degenerate_reply(text: str) -> bool:
+    stripped = text.strip()
+    return not stripped or bool(_DEGENERATE_PREFIX_PATTERN.match(stripped))
+
 
 class ToolCallError(Exception):
     """A tool call that couldn't be parsed or executed; carries the tool name
@@ -121,11 +141,21 @@ class LocalAgent:
             is_last_hop = hop == _MAX_TOOL_HOPS - 1
             self._status("thinking")
 
-            response_text, is_tool_call, unsourced_foreign = yield from self._stream_completion(
+            response_text, is_tool_call, unsourced_foreign, degenerate_start = yield from self._stream_completion(
                 messages, sourced_text="".join(turn_tool_outputs)
             )
 
             if not is_tool_call:
+                if degenerate_start and not is_last_hop:
+                    # The model's draft collapsed into a leaked chat-role word
+                    # ("user") instead of real content. _stream_completion
+                    # holds this back before it's ever shown, so nothing
+                    # leaked to the user - safe to just ask fresh for a real
+                    # answer. Don't add the degenerate draft to history (it
+                    # would only prime the retry to repeat it).
+                    self._status("retrying")
+                    messages.append({"role": "user", "content": templates.degenerate_reply_correction()})
+                    continue
                 if unsourced_foreign and not is_last_hop:
                     # The model hand-wrote foreign script — unreliable. Ask it
                     # to route through translate and keep looping.
@@ -133,6 +163,23 @@ class LocalAgent:
                     messages.append({"role": "assistant", "content": response_text})
                     messages.append({"role": "user", "content": templates.foreign_script_correction()})
                     continue
+                if degenerate_start and is_last_hop:
+                    # Out of hops and still degenerate — force one guaranteed
+                    # real answer rather than showing nothing.
+                    yield from self._final_answer_guaranteed(messages)
+                    return
+                if not response_text.strip():
+                    # Not flagged degenerate (e.g. a stream that produced
+                    # nothing but whitespace, never reaching the holdback
+                    # buffer at all) but still empty - treat the same as a
+                    # degenerate reply rather than silently ending the turn
+                    # with a blank assistant message saved to history.
+                    if is_last_hop:
+                        yield from self._final_answer_guaranteed(messages)
+                    else:
+                        self._status("retrying")
+                        messages.append({"role": "user", "content": templates.degenerate_reply_correction()})
+                        continue
                 return
 
             tool_call_match = _TOOL_CALL_PATTERN.search(response_text)
@@ -212,8 +259,8 @@ class LocalAgent:
         empty reply impossible, for use when the hop budget runs out. Falls
         back to a fixed sentence if the model still produces nothing."""
         messages.append({"role": "user", "content": templates.force_final_answer()})
-        text, _, _ = yield from self._stream_completion(messages)
-        if not text.strip():
+        text, _, _, degenerate_start = yield from self._stream_completion(messages)
+        if not text.strip() or degenerate_start:
             fallback = "I wasn't able to finish that with the tools available — could you rephrase or narrow the request?"
             yield fallback
 
@@ -242,23 +289,67 @@ class LocalAgent:
         silently) and the caller is told via the third return value so it can
         redirect through translate.
 
-        Returns (full_text, is_tool_call, unsourced_foreign) via
-        StopIteration.value, for callers driving this with `yield from`.
+        Also guards against a known small-model failure where the FIRST
+        flushed text (i.e. no '<think>' block at all — a real answer almost
+        always opens with one) is just a leaked chat-role word ("user").
+        Since tokens are yielded live as they arrive, this can only be caught
+        by holding back the very start of any un-tagged text until enough of
+        it has arrived to rule the pattern out (or a newline confirms it) —
+        by the time text has been yielded once, it's already on the user's
+        screen and can't be un-shown. If the holdback resolves to a match,
+        nothing from this call was ever yielded; the caller can safely retry.
+
+        Returns (full_text, is_tool_call, unsourced_foreign, degenerate_start)
+        via StopIteration.value, for callers driving this with `yield from`.
         """
         pending = ""
         in_think = False
         tool_call_found = False
         suppressed = False
+        degenerate_start = False
+        flushed_anything = False
+        pending_start = ""
         full_text = ""
 
         # Longest tag-open string either scanner needs to watch for as a
         # possible partial match at the tail of `pending`.
         tag_opens = (_THINK_OPEN, _TOOL_CALL_OPEN)
+        # Long enough to be past any possible role-word + delimiter, short
+        # enough that a real answer's first flush is barely delayed.
+        _DEGENERATE_HOLDBACK_CHARS = len("assistant") + 2
+
+        def release_pending_start():
+            """Committed: pending_start is real content, not a degenerate
+            prefix. Marks it flushed and returns the text to yield."""
+            nonlocal flushed_anything
+            flushed_anything = True
+            return pending_start
 
         def flush(text: str):
-            nonlocal suppressed
+            nonlocal suppressed, degenerate_start, pending_start
             if not text or suppressed:
                 return
+            if not flushed_anything:
+                # Still deciding whether this is the start of a degenerate
+                # reply (only relevant for the FIRST text ever flushed - once
+                # real content has been shown, later text is trusted as-is).
+                # Hold back until either a line break settles it or we've
+                # seen enough characters to be safely past any role-word.
+                # A leading newline right after </think> is normal protocol
+                # formatting (see templates.py's own examples) and carries no
+                # signal by itself - require at least one non-whitespace
+                # character before a newline can settle the check, otherwise
+                # "\n" alone (which strips to "") would look indistinguishable
+                # from a truly empty reply and get misflagged as degenerate.
+                pending_start += text
+                has_content = bool(pending_start.strip())
+                if (not has_content or "\n" not in pending_start) and len(pending_start) < _DEGENERATE_HOLDBACK_CHARS:
+                    return
+                if _is_degenerate_reply(pending_start) or _DEGENERATE_PREFIX_PATTERN.match(pending_start):
+                    suppressed = True
+                    degenerate_start = True
+                    return
+                text = release_pending_start()
             if self._unsourced_foreign(text, sourced_text):
                 suppressed = True
                 return
@@ -325,8 +416,20 @@ class LocalAgent:
             # literal text.
             yield from flush(pending)
 
+        if not tool_call_found and not suppressed and not flushed_anything and pending_start:
+            # Stream ended (EOS) while still holding back the very start of
+            # the reply for the degenerate-prefix check — e.g. a bare "user"
+            # with no trailing newline, or a short real answer ("Yes.") that
+            # never reached the holdback threshold. Resolve it now against
+            # the full pending_start rather than a partial prefix.
+            if _is_degenerate_reply(pending_start):
+                suppressed = True
+                degenerate_start = True
+            else:
+                yield release_pending_start()
+
         full_text = _THINK_PATTERN.sub("", full_text).strip()
-        return full_text, tool_call_found, suppressed
+        return full_text, tool_call_found, suppressed, degenerate_start
 
     def _execute_tool_call(self, tool_call_match: re.Match) -> tuple[str, str]:
         """Parses and runs one ReAct action, returning (tool_output, function_name).

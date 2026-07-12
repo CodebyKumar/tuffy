@@ -6,8 +6,9 @@ import os
 import sys
 import traceback
 
-from src.models import DEFAULT_MODEL
+from src.models import DEFAULT_MODEL, FALLBACK_MODEL
 from src.models.registry import registry as model_registry
+from src.settings import get_default_model
 from src.skills.loader import discover_skills, mcp_configs_from_skills
 from src.tools.mcp_client import connect_mcp_servers
 import src.tools  # noqa: F401 - registers tools (editing/coding/research/system) as a side effect of import
@@ -34,7 +35,24 @@ connect_mcp_servers(extra_configs=mcp_configs_from_skills())
 
 def main():
     print_logo()
-    session = Session(DEFAULT_MODEL)
+    # User's persisted choice (set via '/models default <id>') wins over the
+    # hardcoded DEFAULT_MODEL; falls back to DEFAULT_MODEL on first run.
+    # Works uniformly whether the chosen model is local or API - model cards
+    # carry their own 'provider' field, so nothing here needs to special-case
+    # model type.
+    startup_model = get_default_model() or DEFAULT_MODEL
+    try:
+        session = Session(startup_model)
+    except Exception as e:
+        # Most commonly a missing GROQ_API_KEY (ValueError from the
+        # OpenAI-compatible provider's load()) or a network/API failure.
+        # Tuffy must still work fully offline with zero configuration, so
+        # fall back to the local gguf model instead of refusing to start.
+        print(
+            f"{C_DIM}Couldn't load default model '{startup_model}' ({e}). "
+            f"Falling back to local model '{FALLBACK_MODEL}'.{C_RESET}"
+        )
+        session = Session(FALLBACK_MODEL)
     import src.memory as memory
     from src.prompts import build_system_prompt
     memory.attach_llm(session.agent.complete)

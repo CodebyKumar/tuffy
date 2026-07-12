@@ -75,6 +75,16 @@ def run_turn(session: Session, user_input: str) -> bool:
         session.active_spinner = None
     print("\n")
 
+    if not full_response.strip():
+        # Belt-and-suspenders: run_stream is expected to always force a real
+        # answer (see _final_answer_guaranteed), but if every guard somehow
+        # still lets an empty reply through, don't save a blank turn — it
+        # corrupts history (the model sees its own empty reply as an example
+        # to repeat) and pollutes elastimem's episodic record.
+        del messages[turn_start:]
+        print(f"{C_DIM}[No response generated — turn discarded, try again]{C_RESET}\n")
+        return False
+
     messages.append({"role": "assistant", "content": full_response})
     # Drop this turn's ReAct intermediates (tool drafts/observations) — the
     # final answer carries what mattered, and stale tool dumps slow every

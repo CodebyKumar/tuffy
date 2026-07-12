@@ -9,6 +9,7 @@ import src.memory as memory
 from src.tools.registry import registry, group_title
 from src.tools.mcp_client import connected_servers, MCP_CONFIG_PATH
 from src.models.registry import registry as model_registry
+from src.settings import set_default_model
 from src.skills.loader import list_skills
 from src.vision import encode_image_to_data_uri
 from src.cli.session import Session, estimate_tokens
@@ -37,6 +38,7 @@ _HELP_SECTIONS = [
     ("Models", [
         ("/models", "list available models (local + API) and the active one"),
         ("/models <id>", "switch to a different model, unloading the current one"),
+        ("/models default <id>", "switch to a model and remember it as the startup default"),
         ("/models info <id>", "show a model's full model card"),
     ]),
     ("Session", [
@@ -173,7 +175,8 @@ def cmd_models(session: Session, arg: str):
             provider = card["provider"]
             tag = "local" if provider == "llama_cpp" else f"api: {provider}"
             print(f"  {marker} {model_id} - {card['name']} [{caps}] ({tag})")
-        print(f"{C_DIM}  Use '/models info <id>' for full model card, '/models <id>' to switch.{C_RESET}\n")
+        print(f"{C_DIM}  Use '/models info <id>' for full model card, '/models <id>' to switch, "
+              f"'/models default <id>' to switch and remember for next startup.{C_RESET}\n")
         return
 
     if arg.lower().startswith("info "):
@@ -203,23 +206,32 @@ def cmd_models(session: Session, arg: str):
         print()
         return
 
+    make_default = False
+    if arg.lower().startswith("default "):
+        make_default = True
+        arg = arg[len("default "):].strip()
+
     requested_id = arg
-    if requested_id == session.current_model_id:
-        print(f"{C_DIM}Model '{requested_id}' is already active.{C_RESET}\n")
-        return
     try:
         model_registry.get(requested_id)
     except ValueError as e:
         print(f"{C_DIM}{e}{C_RESET}\n")
         return
 
-    try:
-        session.switch_model(requested_id)
-    except Exception as e:
-        print(f"{C_WARN}Couldn't switch to '{requested_id}': {e}{C_RESET}")
-        print(f"{C_DIM}Staying on '{session.current_model_id}'.{C_RESET}\n")
-        return
-    print(f"{C_SUCCESS}Switched to model '{requested_id}'.{C_RESET}\n")
+    if requested_id == session.current_model_id:
+        print(f"{C_DIM}Model '{requested_id}' is already active.{C_RESET}\n")
+    else:
+        try:
+            session.switch_model(requested_id)
+        except Exception as e:
+            print(f"{C_WARN}Couldn't switch to '{requested_id}': {e}{C_RESET}")
+            print(f"{C_DIM}Staying on '{session.current_model_id}'.{C_RESET}\n")
+            return
+        print(f"{C_SUCCESS}Switched to model '{requested_id}'.{C_RESET}\n")
+
+    if make_default:
+        set_default_model(requested_id)
+        print(f"{C_SUCCESS}'{requested_id}' is now the default model - it will load automatically next time Tuffy starts.{C_RESET}\n")
 
 
 # --- /image ------------------------------------------------------------
