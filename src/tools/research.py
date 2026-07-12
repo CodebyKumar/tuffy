@@ -50,8 +50,7 @@ def web_search(query: str, mode: str = "text") -> str:
 
 @registry.register(
     name="get_datetime",
-    description="Get the current date/time, or compute a date offset (e.g. 'in 10 days', '3 weeks ago'). "
-                 "Use this instead of guessing today's date or doing date math yourself.",
+    description="Get the current date/time, or a date offset from now (e.g. 'in 10 days', '3 weeks ago'). Use this instead of guessing today's date or doing date math yourself.",
     parameters={
         "offset_days": {"type": "string", "description": "Integer number of days to offset from now; 0 or omitted for the current date/time. Can be negative."}
     },

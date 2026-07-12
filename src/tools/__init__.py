@@ -3,7 +3,7 @@ side effect. Each domain lives in its own module — see registry.py's GROUP_*
 constants for the canonical group names:
 
   editing.py   - workspace file read/write/list, targeted edit_file
-  coding.py    - run_python, run_shell, git status/diff/commit
+  coding.py    - run_python, run_shell
   research.py  - web_search, translate, get_datetime
   system.py    - get_system_stats, top_processes
   registry.py  - ToolRegistry/decorator machinery only, no tools of its own

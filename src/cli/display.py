@@ -92,7 +92,7 @@ class Spinner:
         self._thread = threading.Thread(target=run, daemon=True)
         self._thread.start()
 
-    def stop(self):
+    def stop(self, show_prompt: bool = True):
         if self._thread is None:
             return
 
@@ -104,8 +104,11 @@ class Spinner:
         sys.stdout.write("\033[?25h")
         sys.stdout.flush()
 
-        print(
-            f"{CLEAR_LINE}{C_AI}AI ❯{C_RESET} ",
-            end="",
-            flush=True,
-        )
+        if show_prompt:
+            print(
+                f"{CLEAR_LINE}{C_AI}AI ❯{C_RESET} ",
+                end="",
+                flush=True,
+            )
+        else:
+            print(CLEAR_LINE, end="", flush=True)

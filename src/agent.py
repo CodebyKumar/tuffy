@@ -16,6 +16,11 @@ from src.vision import IMAGE_SENTINEL
 _MAX_TOOL_HOPS = 4
 
 _TOOL_CALL_PATTERN = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
+_THINK_PATTERN = re.compile(r"<think>\s*(.*?)\s*</think>", re.DOTALL)
+
+_THINK_OPEN = "<think>"
+_THINK_CLOSE = "</think>"
+_TOOL_CALL_OPEN = "<tool_call>"
 
 # Scripts the model cannot write reliably itself (Greek/Cyrillic through
 # Indic through CJK). Symbols, punctuation and emoji are deliberately outside
@@ -222,26 +227,42 @@ class LocalAgent:
         """Streams one completion token-by-token as it's generated, using the
         model card's sampling_params (temperature etc.) as-is.
 
-        The system prompt requires tool calls to start with '<tool_call>' and
-        contain nothing else, so we only need to buffer long enough to tell
-        whether the response is going to be a tool call: if the accumulated
-        text so far can still be a prefix of '<tool_call>', hold it back;
-        otherwise it's plain text, so flush everything buffered and yield
-        the rest live as it streams in.
+        Scans the stream for '<think>...</think>' and '<tool_call>' tags
+        wherever they appear — not just as the literal first bytes of the
+        response. Plain text flushes live as it arrives; only the tail that
+        could still be the start of one of these tags is held back. A
+        '<think>' block is fully consumed and reported via trace_cb (never
+        shown as answer text); a '<tool_call>' found anywhere stops live
+        yielding and marks the response as a tool call, matching what
+        run_stream's regex search over the full text already does.
 
         Additionally guards against the model hand-writing foreign script it
         can't write reliably: the moment an unsourced foreign character shows
-        up, yielding stops (the rest is consumed silently) and the caller is
-        told via the third return value so it can redirect through translate.
+        up in text about to be flushed, yielding stops (the rest is consumed
+        silently) and the caller is told via the third return value so it can
+        redirect through translate.
 
         Returns (full_text, is_tool_call, unsourced_foreign) via
         StopIteration.value, for callers driving this with `yield from`.
         """
-        marker = "<tool_call>"
-        buffer = ""
-        revealed = False
+        pending = ""
+        in_think = False
+        tool_call_found = False
         suppressed = False
         full_text = ""
+
+        # Longest tag-open string either scanner needs to watch for as a
+        # possible partial match at the tail of `pending`.
+        tag_opens = (_THINK_OPEN, _TOOL_CALL_OPEN)
+
+        def flush(text: str):
+            nonlocal suppressed
+            if not text or suppressed:
+                return
+            if self._unsourced_foreign(text, sourced_text):
+                suppressed = True
+                return
+            yield text
 
         stream = self.provider.stream_completion(messages, **self.sampling_params)
         for chunk in stream:
@@ -250,36 +271,62 @@ class LocalAgent:
                 continue
             full_text += delta
 
-            if suppressed:
+            if suppressed or tool_call_found:
                 continue
 
-            if revealed:
-                if self._unsourced_foreign(delta, sourced_text):
-                    suppressed = True
+            pending += delta
+
+            while True:
+                if in_think:
+                    close_idx = pending.find(_THINK_CLOSE)
+                    if close_idx == -1:
+                        break
+                    think_text = pending[:close_idx].strip()
+                    self._trace("thought", text=think_text)
+                    pending = pending[close_idx + len(_THINK_CLOSE):]
+                    in_think = False
                     continue
-                yield delta
-                continue
 
-            buffer += delta
-            stripped = buffer.lstrip()
-            if not stripped or marker.startswith(stripped[:len(marker)]):
-                # All whitespace so far, or still an unresolved prefix of '<tool_call>' - keep buffering.
-                continue
+                think_idx = pending.find(_THINK_OPEN)
+                call_idx = pending.find(_TOOL_CALL_OPEN)
+                candidates = [i for i in (think_idx, call_idx) if i != -1]
+                if not candidates:
+                    # No tag found yet - only hold back a tail that could
+                    # still become the start of one; flush the rest live.
+                    safe_len = len(pending)
+                    for opener in tag_opens:
+                        for k in range(min(len(opener), len(pending)), 0, -1):
+                            if pending[-k:] == opener[:k]:
+                                safe_len = min(safe_len, len(pending) - k)
+                                break
+                    if safe_len > 0:
+                        yield from flush(pending[:safe_len])
+                        pending = pending[safe_len:]
+                    break
 
-            if self._unsourced_foreign(buffer, sourced_text):
-                suppressed = True
-                continue
+                first_idx = min(candidates)
+                yield from flush(pending[:first_idx])
+                if suppressed:
+                    break
 
-            # Confirmed this isn't a tool call: release everything held back.
-            revealed = True
-            yield buffer
+                if first_idx == think_idx:
+                    pending = pending[first_idx + len(_THINK_OPEN):]
+                    in_think = True
+                    continue
+                else:
+                    tool_call_found = True
+                    pending = ""
+                    break
 
-        if not revealed and not suppressed:
-            # Whole response fit in the buffer without resolving - decide now.
-            if buffer.strip().startswith(marker):
-                return full_text.strip(), True, False
-            yield buffer
-        return full_text.strip(), False, suppressed
+        if not tool_call_found and not suppressed and pending:
+            # Stream ended with leftover text that never resolved into a
+            # complete tag (e.g. an unclosed '<think>' or a false-alarm
+            # partial match) - it was never actually a tag, so flush it as
+            # literal text.
+            yield from flush(pending)
+
+        full_text = _THINK_PATTERN.sub("", full_text).strip()
+        return full_text, tool_call_found, suppressed
 
     def _execute_tool_call(self, tool_call_match: re.Match) -> tuple[str, str]:
         """Parses and runs one ReAct action, returning (tool_output, function_name).
@@ -336,6 +383,6 @@ class LocalAgent:
             shown = f"(image attached, saved at {image_path})"
         else:
             shown = tool_output
-        self._trace("tool_result", name=function_name, result=shown[:600])
+        self._trace("tool_result", name=function_name, result=shown)
 
         return tool_output, function_name

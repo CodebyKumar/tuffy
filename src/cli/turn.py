@@ -4,7 +4,7 @@ into session history."""
 
 from src.memory import extract_facts
 from src.cli.session import Session, keep_only_latest_image, trim_history, compact_turn
-from src.cli.display import Spinner, C_DIM, CLEAR_LINE, C_RESET
+from src.cli.display import Spinner, C_DIM, C_RESET
 from src.llm.base import ProviderError
 
 
@@ -38,11 +38,9 @@ def run_turn(session: Session, user_input: str) -> bool:
             # place; later calls are no-ops and never touch the screen.
             if first_token:
                 first_token = False
-                if session.trace_printed:
-                    print(CLEAR_LINE, flush=True)
-                spinner.stop()
+                spinner.stop(show_prompt=not session.trace_printed)
             else:
-                spinner.stop()
+                spinner.stop(show_prompt=False)
             print(token, end="", flush=True)
             full_response += token
     except RuntimeError as e:

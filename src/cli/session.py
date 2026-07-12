@@ -10,7 +10,7 @@ from src.agent import LocalAgent
 from src.prompts import build_system_prompt
 from src.memory import summarize_session, add_session_summary
 from src.models.registry import registry as model_registry
-from src.cli.display import C_DIM, C_WARN, C_USER, C_BLUE, C_RESET, CLEAR_LINE
+from src.cli.display import C_DIM, C_WARN, C_USER, C_BLUE, C_AI, C_RESET, CLEAR_LINE
 
 # Keep the rolling chat history well under n_ctx (4096 tokens) so the
 # system prompt (rules + memory + protocol examples) never gets silently
@@ -137,25 +137,35 @@ class Session:
         self.agent.trace_cb = self._render_trace
 
     def _render_trace(self, event: str, data: dict):
-        self.trace_printed = True
         spinner = self.active_spinner
         if spinner is not None:
-            spinner.stop()
+            spinner.stop(show_prompt=False)
 
-        if event == "tool_call":
+        if not self.trace_printed:
+            # First trace line of the turn carries the one-and-only "AI ❯"
+            # marker; every subsequent trace/answer line is unprefixed so
+            # the whole turn reads as a single AI ❯ block.
+            print(f"{CLEAR_LINE}{C_AI}AI ❯{C_RESET} ", end="", flush=True)
+        else:
+            print(CLEAR_LINE, end="", flush=True)
+        self.trace_printed = True
+
+        if event == "thought":
+            print(f"{C_BLUE}[thought] {data['text']}{C_RESET}", flush=True)
+        elif event == "tool_call":
             args_json = json.dumps(data["arguments"], ensure_ascii=False)
             if data.get("thought"):
-                print(f"{CLEAR_LINE}{C_BLUE}[thoughts] {data['thought']}{C_RESET}", flush=True)
+                print(f"{C_BLUE}[thought] {data['thought']}{C_RESET}", flush=True)
                 print(f"{C_WARN}[tool_call] {data['name']}({args_json}){C_RESET}", flush=True)
             else:
-                print(f"{CLEAR_LINE}{C_WARN}[tool_call] {data['name']}({args_json}){C_RESET}", flush=True)
+                print(f"{C_WARN}[tool_call] {data['name']}({args_json}){C_RESET}", flush=True)
         elif event == "tool_result":
-            print(f"{CLEAR_LINE}{C_USER}[response] {data['result']}{C_RESET}", flush=True)
+            print(f"{C_USER}[response] {data['result']}{C_RESET}", flush=True)
             if data.get("name") == "capture_image":
                 res = data.get("result", "")
-                prefix = "(image attached, saved at "
-                if res.startswith(prefix) and res.endswith(")"):
-                    path = res[len(prefix):-1]
+                marker = "(image attached, saved at "
+                if res.startswith(marker) and res.endswith(")"):
+                    path = res[len(marker):-1]
                     if os.path.exists(path):
                         self.captured_images.append(path)
 

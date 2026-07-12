@@ -21,7 +21,7 @@ def safe_workspace_path(filename: str) -> str:
 
 @registry.register(
     name="save_to_file",
-    description="Write logs, summaries, notes, or structured text content to a named file in the local workspace. Overwrites the whole file — for a small change to an existing file, prefer edit_file.",
+    description="Write text to a named file in the local workspace, creating or fully overwriting it. For a small change to a file that already exists, use edit_file instead so the rest of the file isn't lost.",
     parameters={
         "filename": {"type": "string", "description": "Name for the file, e.g. 'notes.txt' or 'summary.md'."},
         "file_content": {"type": "string", "description": "The text content to write to the file."}
@@ -41,7 +41,7 @@ def save_to_file(filename: str, file_content: str) -> str:
 
 @registry.register(
     name="read_file",
-    description="Read back the contents of a file previously saved in the local workspace.",
+    description="Read the full contents of a file already saved in the local workspace.",
     parameters={"filename": {"type": "string", "description": "Name of the file to read, e.g. 'notes.txt'."}},
     required=["filename"],
     group="editing",
@@ -59,7 +59,7 @@ def read_file(filename: str) -> str:
 
 @registry.register(
     name="list_workspace_files",
-    description="List all files currently saved in the local workspace directory.",
+    description="List every file currently saved in the local workspace.",
     parameters={},
     required=[],
     group="editing",
@@ -81,10 +81,7 @@ def list_workspace_files(placeholder: str = "") -> str:
 
 @registry.register(
     name="edit_file",
-    description="Make a targeted change to an existing workspace file by replacing one exact occurrence of "
-                "some existing text with new text, without rewriting the whole file. Use this instead of "
-                "save_to_file when you only need to fix or add a small part of a file that already exists. "
-                "Fails if old_text isn't found, or is found more than once (be specific enough to be unique).",
+    description="Replace one exact occurrence of existing text in a workspace file, without rewriting the rest. Use this instead of save_to_file for a small fix to a file that already exists. Fails if old_text isn't found in the file, or is found more than once.",
     parameters={
         "filename": {"type": "string", "description": "Name of the existing file to edit, e.g. 'app.py'."},
         "old_text": {"type": "string", "description": "The exact existing text to find and replace. Must appear exactly once in the file."},

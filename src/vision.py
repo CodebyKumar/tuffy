@@ -78,7 +78,7 @@ def encode_image_to_data_uri(path: str) -> str:
 
 @registry.register(
     name="capture_image",
-    description="Take a photo with the machine's camera right now. Call this IMMEDIATELY whenever the user asks you to take/click/snap a picture, look at them, see them, or check the camera — never reply 'I'm taking a picture' or 'just say the word' in text; the only way to actually take a photo is calling this tool. Not for files already on disk.",
+    description="Take a photo with the machine's camera right now. Call this IMMEDIATELY whenever the user asks you to take/click/snap a picture, look at them, see them, or check the camera — the only way to actually take a photo is calling this tool, never say you're taking one without calling it. Not for files already on disk (use view_image for those).",
     parameters={},
     required=[],
     group="system",

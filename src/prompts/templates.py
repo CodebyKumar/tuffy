@@ -16,25 +16,32 @@ from src import identity
 # they were real input (an earlier example literally caused the agent to
 # view_image('/Users/me/Desktop/screenshot.png')).
 _REACT_EXAMPLES = """\
+Every Assistant turn below starts with a <think> block — this is mandatory on every reply, tool call or not.
+
 Example — no tool needed:
 User: hey, how's it going?
-Assistant: All good — what can I do for you?
+Assistant: <think>Just a greeting, no tool needed.</think>
+All good — what can I do for you?
 
 Example — one tool:
 User: <something you need a tool for>
-Assistant: <tool_call>
+Assistant: <think>brief reasoning about what's needed</think>
+<tool_call>
 {"thought": "<one short line: what the user needs -> which tool>", "name": "<tool name from the list>", "arguments": {"<arg>": "<value taken from the user's actual message>"}}
 </tool_call>
 (after the Observation comes back)
-Assistant: <final answer grounded in the observation>
+Assistant: <think>brief reasoning grounded in the observation</think>
+<final answer grounded in the observation>
 
 Example — chained tools:
 User: <something needing two steps, e.g. look something up then translate it>
-Assistant: <tool_call>
+Assistant: <think>first I need X</think>
+<tool_call>
 {"thought": "first I need X", "name": "<tool A>", "arguments": {...}}
 </tool_call>
 (Observation A comes back)
-Assistant: <tool_call>
+Assistant: <think>now convert/refine with tool B</think>
+<tool_call>
 {"thought": "now convert/refine with tool B", "name": "<tool B>", "arguments": {...}}
 </tool_call>
 (Observation B comes back)
