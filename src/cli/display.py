@@ -2,6 +2,8 @@
 status spinner. Nothing in here touches Session state or agent internals —
 it only renders strings it's handed."""
 
+import re
+import shutil
 import sys
 import threading
 import time
@@ -15,6 +17,7 @@ C_BLUE = "\033[94m"             # Blue
 C_BOLD = "\033[1m"
 C_RESET = "\033[0m"
 CLEAR_LINE = "\r\033[K"
+_ANSI_RE = re.compile(r"\033\[[0-9;]*m")
 
 _BANNER = f"""{C_SUCCESS}{C_BOLD}
   ████████╗██╗   ██╗███████╗███████╗██╗   ██╗
@@ -52,6 +55,7 @@ class Spinner:
         self._stop_event = threading.Event()
         self._thread = None
         self._lock = threading.Lock()
+        self._last_rows = 0  # terminal rows the last-drawn frame wrapped onto
 
     def set_label(self, label: str):
         label = " ".join(str(label).split())
@@ -61,6 +65,30 @@ class Spinner:
 
         with self._lock:
             self.label = label or "thinking"
+
+    def _clear_last_render(self):
+        """Erases every terminal row the previous frame drew on, not just
+        the current one. A long label can push 'AI ❯ label...' past the
+        terminal width and wrap onto a second row; \\r\\033[K only clears
+        the row the cursor is on, so a naive clear leaves the wrapped-over
+        remainder (including stray '...' dots) stuck in the scrollback."""
+        if self._last_rows > 1:
+            sys.stdout.write(f"\033[{self._last_rows - 1}A")
+        sys.stdout.write(CLEAR_LINE)
+        for _ in range(self._last_rows - 1):
+            sys.stdout.write("\033[B\033[K")
+        if self._last_rows > 1:
+            sys.stdout.write(f"\033[{self._last_rows - 1}A")
+        self._last_rows = 0
+
+    def _render(self, text: str):
+        self._clear_last_render()
+        sys.stdout.write(text)
+        sys.stdout.flush()
+
+        cols = shutil.get_terminal_size(fallback=(80, 24)).columns
+        visible_len = len(_ANSI_RE.sub("", text))
+        self._last_rows = max(1, -(-visible_len // cols))  # ceil div
 
     def start(self):
         if self._thread is not None:
@@ -79,11 +107,9 @@ class Spinner:
                 with self._lock:
                     label = self.label
 
-                print(
-                    f"{CLEAR_LINE}{C_AI}AI ❯{C_RESET} "
-                    f"{C_DIM}{label}{frames[i % len(frames)]}{C_RESET}",
-                    end="",
-                    flush=True,
+                self._render(
+                    f"{C_AI}AI ❯{C_RESET} "
+                    f"{C_DIM}{label}{frames[i % len(frames)]}{C_RESET}"
                 )
 
                 i += 1
@@ -105,10 +131,7 @@ class Spinner:
         sys.stdout.flush()
 
         if show_prompt:
-            print(
-                f"{CLEAR_LINE}{C_AI}AI ❯{C_RESET} ",
-                end="",
-                flush=True,
-            )
+            self._render(f"{C_AI}AI ❯{C_RESET} ")
         else:
-            print(CLEAR_LINE, end="", flush=True)
+            self._clear_last_render()
+            sys.stdout.flush()

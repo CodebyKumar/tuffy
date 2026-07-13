@@ -17,3 +17,8 @@ dependencies = [
 
 [tool.uv.sources]
 elastimem = { path = "../elastimem", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

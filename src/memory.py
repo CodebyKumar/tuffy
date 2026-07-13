@@ -53,7 +53,12 @@ def _adapt(agent_complete):
         return content.strip()
     return llm
 
+_last_complete_fn = None  # remembered so clear_memory() can re-wire a fresh store
+
+
 def attach_llm(complete_fn):
+    global _last_complete_fn
+    _last_complete_fn = complete_fn
     if os.environ.get("TUFFY_NO_AUTO_MEMORY") == "1":
         return
     mem.complete_fn = _adapt(complete_fn)
@@ -111,6 +116,12 @@ def clear_memory() -> None:
         context_tokens=4096,
         reserved_keys=frozenset(RESERVED_IDENTITY_KEYS),
     )
+    # clear_memory() swaps `mem` for a brand-new store with no complete_fn of
+    # its own — without re-attaching here, every background job (fact
+    # extraction, summaries) on the fresh store would silently run with no
+    # LLM until the next model switch happened to call attach_llm() again.
+    if _last_complete_fn is not None:
+        attach_llm(_last_complete_fn)
 
 # --- Register tools ---
 

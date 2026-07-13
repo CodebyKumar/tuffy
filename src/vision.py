@@ -10,7 +10,7 @@ URI and return a sentinel-prefixed string (IMAGE_SENTINEL + real file path +
 "\n" + data URI). src/agent.py's _execute_tool_call recognizes the sentinel,
 tells the model the real path in the observation (so it never has to guess or
 invent one), and attaches the image itself to the next user turn via
-LocalAgent.attach_image — instead of feeding either as ordinary tool-output
+ModelAgent.attach_image — instead of feeding either as ordinary tool-output
 text.
 
 capture_image is a real tool (registered with the tool registry) so the

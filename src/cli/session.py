@@ -3,13 +3,17 @@ model/agent, chat history, pending image, and history-trimming rules. This
 is the only place main.py's turn loop reaches into for agent state."""
 
 import gc
-import json
 import os
 
-from src.agent import LocalAgent
+from src.engine.model_agent import ModelAgent
 from src.prompts import build_system_prompt
 from src.models.registry import registry as model_registry
-from src.cli.display import C_DIM, C_WARN, C_USER, C_BLUE, C_AI, C_RESET, CLEAR_LINE
+from src.cli.display import C_DIM, C_WARN, C_RESET
+
+# Prefix marking a model-switch notice injected into history (see
+# Session.switch_model) so a later switch can find and replace it instead of
+# appending a new one every time.
+_MODEL_SWITCH_TAG = "[Model switched from "
 
 
 def _limits_line(model_card: dict) -> str:
@@ -25,10 +29,10 @@ def _limits_line(model_card: dict) -> str:
     return " | ".join(parts)
 
 
-def load_agent(model_id: str) -> LocalAgent:
+def load_agent(model_id: str) -> ModelAgent:
     model_card = model_registry.get(model_id)
     print(f"{C_DIM}Loading model '{model_id}'...{C_RESET}")
-    agent = LocalAgent(model_card)
+    agent = ModelAgent(model_card)
     vision = "vision on" if agent.supports_vision else "text only"
     print(f"{C_DIM}Ready: {model_card['name']} ({vision}){C_RESET}")
     limits_line = _limits_line(model_card)
@@ -62,7 +66,7 @@ def keep_only_latest_image(messages: list) -> None:
 
 def _content_char_count(content) -> int:
     """Message content is normally a string, but a message carrying an image
-    (see LocalAgent.attach_image) has a multimodal content list instead - only
+    (see ModelAgent.attach_image) has a multimodal content list instead - only
     the text parts count toward the char budget there."""
     if isinstance(content, str):
         return len(content)
@@ -148,63 +152,31 @@ def compact_turn(messages: list, turn_start: int) -> None:
 
 class Session:
     """Owns the mutable state a running Tuffy session needs: the active
-    model/agent, chat history, pending image, and the background memory worker."""
+    model/agent, chat history, pending image, and the background memory
+    worker. Display concerns (spinner, trace rendering) live entirely in
+    src/cli/turn.py, which drives src.engine.turn_engine.run_turn and reacts
+    to its events — this class no longer wires any callback into the agent."""
 
     def __init__(self, model_id: str):
         self.current_model_id = model_id
         self.agent = load_agent(model_id)
         self.pending_image_data_uri = None
-        self.active_spinner = None
         self.captured_images = []
-        self.trace_printed = False
 
-        self._wire_agent_callbacks()
         self.messages = [self.system_message()]
 
-    # -- wiring between the agent's live signals and the active UI mode --
-    def _wire_agent_callbacks(self):
-        self.agent.status_cb = self._on_status
-        self.agent.trace_cb = self._render_trace
-
-    def _render_trace(self, event: str, data: dict):
-        spinner = self.active_spinner
-        if spinner is not None:
-            spinner.stop(show_prompt=False)
-
-        if not self.trace_printed:
-            # First trace line of the turn carries the one-and-only "AI ❯"
-            # marker; every subsequent trace/answer line is unprefixed so
-            # the whole turn reads as a single AI ❯ block.
-            print(f"{CLEAR_LINE}{C_AI}AI ❯{C_RESET} ", end="", flush=True)
-        else:
-            print(CLEAR_LINE, end="", flush=True)
-        self.trace_printed = True
-
-        if event == "thought":
-            print(f"{C_BLUE}[thought] {data['text']}{C_RESET}", flush=True)
-        elif event == "tool_call":
-            args_json = json.dumps(data["arguments"], ensure_ascii=False)
-            if data.get("thought"):
-                print(f"{C_BLUE}[thought] {data['thought']}{C_RESET}", flush=True)
-                print(f"{C_WARN}[tool_call] {data['name']}({args_json}){C_RESET}", flush=True)
-            else:
-                print(f"{C_WARN}[tool_call] {data['name']}({args_json}){C_RESET}", flush=True)
-        elif event == "tool_result":
-            print(f"{C_USER}[response] {data['result']}{C_RESET}", flush=True)
-            if data.get("name") == "capture_image":
-                res = data.get("result", "")
-                marker = "(image attached, saved at "
-                if res.startswith(marker) and res.endswith(")"):
-                    path = res[len(marker):-1]
-                    if os.path.exists(path):
-                        self.captured_images.append(path)
-
-        if spinner is not None:
-            spinner.start()
-
-    def _on_status(self, label: str):
-        if self.active_spinner is not None:
-            self.active_spinner.set_label(label)
+    def note_captured_image(self, tool_name: str, result_text: str):
+        """Called by the turn runner when a tool result comes back, so a
+        captured photo (e.g. capture_image) gets cleaned up at session end
+        the same as before — just driven by an explicit call instead of
+        string-sniffing inside a trace callback."""
+        if tool_name != "capture_image":
+            return
+        marker = "(image attached, saved at "
+        if result_text.startswith(marker) and result_text.endswith(")"):
+            path = result_text[len(marker):-1]
+            if os.path.exists(path):
+                self.captured_images.append(path)
 
     def system_message(self, context_plan=None) -> dict:
         return {
@@ -230,17 +202,26 @@ class Session:
         new_card = model_registry.get(model_id)
         static_tokens = len(build_system_prompt(model_card=new_card)) // 4
         memory.reconfigure_for_model(new_card, static_prompt_tokens=static_tokens)
-        self._wire_agent_callbacks()
         old_model_id = self.current_model_id
         self.current_model_id = model_id
         # Conversation history is kept (not reset) across a model switch, but
         # the new model needs to know a switch happened - otherwise it can
         # mistake a plain "hi" for a nudge to re-answer the last unresolved
         # question in the carried-over history instead of just greeting back.
+        # Any earlier switch-notice is REPLACED, not appended to - repeated
+        # /models switching within one long session used to leave one of
+        # these system messages behind per switch (trim_history's pairing
+        # logic only evicts consecutive user/assistant pairs, so a lone
+        # injected system message was never eligible for eviction and
+        # accumulated forever).
+        self.messages = [
+            m for m in self.messages
+            if not (m.get("role") == "system" and m.get("content", "").startswith(_MODEL_SWITCH_TAG))
+        ]
         self.messages.append({
             "role": "system",
             "content": (
-                f"[Model switched from '{old_model_id}' to '{model_id}'. "
+                f"{_MODEL_SWITCH_TAG}'{old_model_id}' to '{model_id}'. "
                 "Prior turns above are already answered - do not re-answer "
                 "them unless the user explicitly asks again.]"
             ),

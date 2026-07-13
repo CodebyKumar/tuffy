@@ -11,6 +11,7 @@ from llama_cpp import Llama
 from llama_cpp.llama_chat_format import MTMDChatHandler
 
 from src.llm.base import LLMProvider
+from src.engine.errors import OutOfMemoryError
 
 _VISION_CAPABILITIES = {"vision", "omni"}
 
@@ -117,4 +118,17 @@ class LlamaCppProvider(LLMProvider):
 
     def stream_completion(self, messages: list, **sampling_params):
         params = sampling_params or self.sampling_params
-        return self.llm.create_chat_completion(messages=messages, stream=True, **params)
+        try:
+            stream = self.llm.create_chat_completion(messages=messages, stream=True, **params)
+            yield from stream
+        except RuntimeError as e:
+            # llama-cpp-python raises a bare RuntimeError from its C bindings
+            # when llama.cpp's decode call returns a negative status — most
+            # commonly -3, which the upstream project documents as "failed
+            # to find a KV cache slot", i.e. out of memory. This is the only
+            # place in the codebase allowed to translate a bare RuntimeError
+            # into that diagnosis, because this is the only place that knows
+            # for certain the RuntimeError actually came from llama.cpp's
+            # decode path rather than from unrelated code (e.g. a tool)
+            # further up the call stack.
+            raise OutOfMemoryError(str(e)) from e
