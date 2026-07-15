@@ -44,6 +44,12 @@ class TurnHealth:
     def should_nudge(self) -> bool:
         return self.consecutive_failures() >= _CONSECUTIVE_FAILURE_NUDGE_THRESHOLD
 
+    def recent_outcomes(self) -> list[str]:
+        """Public read of the rolling outcome window, oldest first - for
+        callers (e.g. tuffy.AgentSession.status()) that want the raw list
+        rather than summary()'s formatted string."""
+        return list(self._outcomes)
+
     def summary(self) -> str:
         if not self._outcomes:
             return "no turns yet"
