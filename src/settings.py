@@ -6,7 +6,11 @@ editing code."""
 import json
 import os
 
-SETTINGS_PATH = os.path.join(".tuffy", "settings.json")
+# Resolved against this package's own location, not the caller's cwd — see
+# src/models/registry.py and src/memory.py for the same fix and why it
+# matters once tuffy is imported from a different cwd (e.g. tuffy-ui/backend).
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SETTINGS_PATH = os.path.join(_REPO_ROOT, ".tuffy", "settings.json")
 
 
 def _load() -> dict:

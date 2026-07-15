@@ -5,6 +5,22 @@ that a dev can override per model. /models in main.py reads this registry to
 list and switch models.
 """
 
+import os
+
+# Model card 'path'/'mmproj_path' values are written as repo-relative strings
+# (e.g. 'src/models/weights/...') in src/models/configs/. The terminal only
+# ever runs with cwd == this repo's root, so that was invisible historically,
+# but any other consumer importing tuffy as a package (e.g. tuffy-ui/backend,
+# started from a different cwd) needs these resolved to real paths — resolve
+# against this package's own location, not the caller's cwd.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _resolve_repo_path(path: str | None) -> str | None:
+    if not path or os.path.isabs(path):
+        return path
+    return os.path.join(_REPO_ROOT, path)
+
 # Every keyword argument llama_cpp.Llama.__init__ accepts, with the same
 # defaults llama-cpp-python itself uses. A model's "load_params" dict below
 # is merged over these, so a model only needs to specify what it overrides.
@@ -179,8 +195,8 @@ class ModelRegistry:
             "quantization": quantization,
             "capabilities": list(capabilities),
             "provider": provider,
-            "path": path,
-            "mmproj_path": mmproj_path,
+            "path": _resolve_repo_path(path),
+            "mmproj_path": _resolve_repo_path(mmproj_path),
             "context_length": context_length,
             "parameters": parameters,
             "license": license,

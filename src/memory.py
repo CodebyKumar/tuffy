@@ -26,7 +26,14 @@ from src.tools.registry import registry
 _THINK_PATTERN = re.compile(r"<think>\s*.*?\s*</think>", re.DOTALL)
 _UNCLOSED_THINK_PATTERN = re.compile(r"<think>.*$", re.DOTALL)
 
-DB_DIR = "./data/memory"
+# Resolved against this package's own location, not the caller's cwd — the
+# terminal always runs with cwd == this repo's root so a relative path was
+# invisible historically, but any other consumer importing tuffy as a
+# package (e.g. tuffy-ui/backend, started from a different cwd) needs this
+# to still land in the same shared store (Q3: memory is shared, one
+# Elastimem singleton for the whole user, not per-consumer).
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_DIR = os.path.join(_REPO_ROOT, "data", "memory")
 os.makedirs(DB_DIR, exist_ok=True)
 DB_PATH = os.path.join(DB_DIR, "tuffy.db")
 
