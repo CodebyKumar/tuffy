@@ -1,7 +1,7 @@
-"""Tests for the tuffy/__init__.py public package surface — the exact
+"""Tests for the tuffy_core/__init__.py public package surface — the exact
 import path an external consumer (tuffy-ui/backend) uses:
 
-    from tuffy import create_session, AgentSession, run_turn_stream
+    from tuffy_core import create_session, AgentSession, run_turn_stream
 
 run_turn_stream is expected to behave identically to src.cli.turn.run_turn
 (same history mutation, health tracking, rollback-on-failure) since both
@@ -17,7 +17,7 @@ from src.engine.events import Done, Failed, Token
 from src.engine.model_agent import ModelAgent
 from src.models.registry import registry as model_registry
 from tests.fakes import FakeProvider
-from tuffy import AgentSession, create_session, run_turn_stream
+from tuffy_core import AgentSession, create_session, run_turn_stream
 
 _FAKE_MODEL_ID = "fake-public-api-model"
 
@@ -73,10 +73,10 @@ def _fake_agent_session(script) -> AgentSession:
 
 class TestPublicSurfaceImportable:
     def test_expected_names_are_importable(self):
-        import tuffy
-        assert hasattr(tuffy, "create_session")
-        assert hasattr(tuffy, "AgentSession")
-        assert hasattr(tuffy, "run_turn_stream")
+        import tuffy_core
+        assert hasattr(tuffy_core, "create_session")
+        assert hasattr(tuffy_core, "AgentSession")
+        assert hasattr(tuffy_core, "run_turn_stream")
 
     def test_agent_session_does_not_expose_internal_fields(self, fake_model_card):
         session = _fake_agent_session(["hi"])

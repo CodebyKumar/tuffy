@@ -52,7 +52,7 @@ def _run_turn_events(session: Session, user_input: str):
     after the generator is exhausted, same as run_turn always has.
 
     This is the shared core behind both the terminal's run_turn (below,
-    which renders each event to stdout) and tuffy.run_turn_stream (which
+    which renders each event to stdout) and tuffy_core.run_turn_stream (which
     yields events straight to an external caller) — the exact same
     trimming/health/memory side effects happen either way, only the
     rendering differs."""

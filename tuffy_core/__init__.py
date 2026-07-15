@@ -1,9 +1,9 @@
 """Public package surface for external consumers (e.g. tuffy-ui/backend).
 
 Everything under src/ is internal — this is the only supported import path
-from outside the tuffy repo:
+from outside the tuffy-cli repo:
 
-    from tuffy import create_session, AgentSession, run_turn_stream
+    from tuffy_core import create_session, AgentSession, run_turn_stream
 
 No new dependencies are introduced here; this module only wraps existing
 src.cli.session.Session / src.cli.turn / src.engine.turn_engine machinery
