@@ -13,7 +13,9 @@ wheels/
 .pytest_cache/
 
 # Model weights (large files)
-src/models/weights/
+src/models/weights/*/
+src/voice/weights/whisper/
+src/voice/weights/piper/
 
 # User memory / personal data
 data/

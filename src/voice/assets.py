@@ -1,12 +1,16 @@
 """Model/asset download-and-cache locations for voice components.
 
-Cached under ~/.tuffy/ to be shared across CLI and UI interfaces.
+Cached under src/voice/weights/ inside the repository to avoid colliding
+with the .tuffy config folder.
 """
 
 from pathlib import Path
 
-WHISPER_MODELS_DIR = Path.home() / ".tuffy" / "models" / "whisper"
-PIPER_MODELS_DIR = Path.home() / ".tuffy" / "models" / "piper"
+# Resolve voice package root directory
+VOICE_DIR = Path(__file__).resolve().parent
+
+WHISPER_MODELS_DIR = VOICE_DIR / "weights" / "whisper"
+PIPER_MODELS_DIR = VOICE_DIR / "weights" / "piper"
 
 WHISPER_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 PIPER_MODELS_DIR.mkdir(parents=True, exist_ok=True)

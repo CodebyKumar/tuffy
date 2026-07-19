@@ -234,7 +234,7 @@ a `/models` switch), and structurally incapable of being written by the reflecti
 
 | Module | Responsibility |
 |---|---|
-| `assets.py` | Resolves, downloads, and caches local Whisper and Piper model assets to `~/.tuffy/models/`. |
+| `assets.py` | Resolves, downloads, and caches local Whisper and Piper model assets inside the repository under `src/voice/weights/`. |
 | `audio.py` | Handles microphone recording and speaker playback, with automatic ALSA/macOS command-line tool fallbacks for complete compatibility on Jetson Orin Nano. |
 | `stt.py` | Performs Speech-to-Text transcription on captured mono float32 PCM using `pywhispercpp`. |
 | `tts.py` | Performs Text-to-Speech synthesis on response text using `piper-tts`, generating mono PCM16 chunks. |
@@ -263,6 +263,7 @@ src/
   settings.py            Persisted user settings (.tuffy/settings.json) — default model id
   vision.py               Image encoding + the IMAGE_SENTINEL hand-off protocol
   voice/                 Voice CLI layer (assets, audio, stt, tts, voice_cli) — §2.3
+    weights/             Local voice model weights (gitignored)
   llm/
     base.py                LLMProvider interface — §2.2
     llama_cpp_provider.py    Local model-weight backend

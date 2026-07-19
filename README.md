@@ -1,4 +1,4 @@
-# Tuffy ⚡
+# Tuffy
 
 Tuffy is a direct, capable personal AI agent. It can run fully offline on local model weights,
 or switch to any OpenAI-compatible API model — same tools, same chat loop, same `/models`
@@ -162,7 +162,7 @@ src/
   memory.py             Elastimem-backed long-term memory (facts/episodic/lessons) + the `remember`/`recall` tools
   settings.py           Persisted user settings (.tuffy/settings.json) — default model id
   vision.py           Image encoding + IMAGE_SENTINEL protocol for vision tool results
-  voice/              Local Speech-to-Text (Whisper) and Text-to-Speech (Piper) wrappers + interactive audio loop
+  voice/              Local Speech-to-Text (Whisper) and Text-to-Speech (Piper) wrappers + interactive audio loop; weights/ holds gitignored voice model weight files
   llm/                   Model-provider interface + adapters (local weights, OpenAI-compatible API)
   models/                Model registry; configs/local.py + configs/api.py hold model cards; weights/ holds gitignored model weight files
   prompts/               All system-prompt text: personas.yaml + templates.py

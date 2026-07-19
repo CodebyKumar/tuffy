@@ -16,6 +16,7 @@ job and `main.py`'s alone. Every other package is usable headless.
 | [prompts/](prompts/) | Every system-prompt string, centralized: `personas.yaml` (static tone/rules) + `templates.py` (Python-built fragments). |
 | [tools/](tools/) | Native tools the agent can call, grouped by domain, plus the MCP client that registers external servers' tools the same way. |
 | [skills/](skills/) | Discovery/loading mechanism for `./.tuffy/skills/*/` capability packs (content lives at the repo root, not here). |
+| [voice/](voice/) | Voice CLI layer: local Speech-to-Text (Whisper) and Text-to-Speech (Piper) wrappers + interactive audio loop; `weights/` holds gitignored voice model weight files. |
 
 ## Environment variables
 
